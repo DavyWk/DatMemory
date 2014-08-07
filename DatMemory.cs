@@ -4,27 +4,53 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Collections.Generic;
 
-// Author : Davy.W(davydavekk), please give credits if you use it.
-// Last update : 4//04/14
 namespace Memory
 {
 	public class DatMemory : IDisposable
 	{
-
+		
 		#region Setup and miscellaneous
 		
 		private string invalidHandle = "The process handle is invalid.";
 		
-		private Process _targetProcess = null;
-		private IntPtr _targetProcessHandle = IntPtr.Zero;
+		public bool Attached
+		{
+			get;
+			private set;
+		}
+		
+		/// <summary>
+		/// Used by internal functions that interact with Win32.
+		/// </summary>
+		private IntPtr _handle;
+		
+		/// <summary>
+		/// Used by public functions, throws an exception if handle is invalid.
+		/// </summary>
+		private IntPtr Handle
+		{
+			get
+			{
+				if(_handle == IntPtr.Zero)
+					throw new InvalidOperationException(invalidHandle);
+				else
+					return _handle;
+			}
+			
+		}
+		
+		private Process targetProcess = null;
+		
 		private bool disposed = false;
 
+		
 		public DatMemory() { } //parameterless constructor
 
 		public DatMemory(string processName)
 		{
 			this.FindProcess(processName);
 		}
+		
 
 		~DatMemory()
 		{
@@ -45,93 +71,83 @@ namespace Memory
 			Dispose(true);
 			GC.SuppressFinalize(this);
 		}
+		
 		/// <summary>
-		/// Returns an array with the name of all modules loaded in the process.
+		/// Gets all the modules loaded in the process.
 		/// </summary>
-		/// <returns></returns>
+		/// <returns>A Dictionary where
+		/// the key is the address of the module
+		/// and the value is its name.</returns>
 		public SortedDictionary<int, string> GetModuleList()
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-				throw new InvalidOperationException(invalidHandle);
-			
-
 			var dic = new SortedDictionary<int, string>();
-			ProcessModuleCollection pmc = _targetProcess.Modules;
+			
+			if(!Attached)
+				return dic;
+			ProcessModuleCollection pmc = targetProcess.Modules;
 
 			foreach (ProcessModule pm in pmc)
-			{
 				dic.Add((int)pm.BaseAddress, pm.ModuleName);
-			}
-
+			
 			return dic;
 		}
 
 		/// <summary>
 		/// Gets the base adress of the main module.
 		/// </summary>
-		public uint GetBaseAdress()
+		public int GetBaseAdress()
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
+			if (Handle == IntPtr.Zero)
 				throw new InvalidOperationException(invalidHandle);
 
-			var module = _targetProcess.MainModule;
+			var module = targetProcess.MainModule;
 
-			return (uint)module.BaseAddress;
+			return (int)module.BaseAddress;
 		}
 
 		/// <summary>
-		/// Opens a process, to allow operations on the process's virtual memory.
+		/// Opens a process
+		/// with rights to manipulate its virtual memory.
 		/// </summary>
-		/// <param name="ProcessName">Name of the process you want to open</param>
-		/// <returns></returns>
-		public bool FindProcess(string ProcessName)
+		public bool FindProcess(string name)
 		{
-			var processes = Process.GetProcessesByName(ProcessName);
-
-			if (processes.Length > 0)
-			{
-				foreach (var p in processes)
-				{
-					if (AttachProcess(p))
-						return true;
-
-					else return false;
-				}
-			}
-
-			return false;
+			if(name.EndsWith(".exe"))
+				name = name.Replace(".exe", string.Empty);
+			
+			var processes = Process.GetProcessesByName(name);
+			if(processes.Length == 0)
+				return false;
+			
+			return AttachProcess(processes[0]);
 		}
 
 		private bool AttachProcess(Process proc)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				_targetProcess = proc;
-				_targetProcessHandle = Win32.OpenProcess(
-					(uint)ProcessAccessRights.All, false,
-					(uint)_targetProcess.Id);
-				
-				if (_targetProcessHandle == IntPtr.Zero)
-				{
-					return false;
-				}
-				else
-					return true;
-			}
-			return false;
+			// If already attached.
+			if(_handle != IntPtr.Zero)
+				return true;
+			
+			targetProcess = proc;
+			_handle = Win32.OpenProcess(
+				(uint)ProcessAccessRights.All, false,
+				(uint)targetProcess.Id);
+			
+			Attached = _handle != IntPtr.Zero;
+			
+			return Attached;
 		}
 
 		/// <summary>
-		/// Free the process.
+		/// Frees the process.
 		/// </summary>
 		private void Detach()
 		{
-			if(_targetProcessHandle == IntPtr.Zero)
+			if((_handle == IntPtr.Zero) || !Attached)
 				return;
 			
-			_targetProcess = null;
-			Win32.CloseHandle(_targetProcessHandle);
-			_targetProcessHandle = IntPtr.Zero;
+			Win32.CloseHandle(Handle);
+			_handle = IntPtr.Zero;
+			Attached = false;
 		}
 		
 
@@ -139,382 +155,305 @@ namespace Memory
 
 		#region Functions
 
+		#region Read
 		/// <summary>
-		/// Returns a byte value.
+		/// Read a byte (8 bits) from an address.
 		/// </summary>
-		/// <param name="address">Address to read the value from</param>
-		/// <returns></returns>
+		/// <param name="address">Address to read the value from.</param>
 		public byte ReadByte(uint address)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
+			if (address == 0)
+				throw new ArgumentException("address");
 
-			uint bytesRead = 0;
-			byte[] _Value = new byte[1];
-			Win32.ReadProcessMemory(_targetProcessHandle, address, _Value, sizeof(byte), ref bytesRead);
-			byte val = _Value[0];
-			return val;
-
+			const int size = sizeof(byte);
+			var buffer = new byte[size];
+			uint read;
+			Win32.ReadProcessMemory(Handle, address, buffer,
+			                        size, out read);
+			return buffer[0];
 		}
 
 		/// <summary>
-		/// Returns a short (2 bytes) value.
+		/// Reads a short (2 bytes) from an address.
 		/// </summary>
-		/// <param name="address">Address to read the value from</param>
-		/// <returns></returns>
+		/// <param name="address">Address to read the value from.</param>
 		public short ReadShort(uint address)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
+			if (address == 0)
+				throw new ArgumentException("address");
 
-			uint bytesRead = 0;
-			byte[] _Value = new byte[sizeof(short)];
-			Win32.ReadProcessMemory(_targetProcessHandle, address, _Value, sizeof(short), ref bytesRead);
-			return BitConverter.ToInt16(_Value, 0);
+			const int size = sizeof(short);
+			var buffer = new byte[size];
+			uint read;
+			Win32.ReadProcessMemory(Handle, address, buffer,
+			                        size, out read);
+			
+			return BitConverter.ToInt16(buffer, 0);
 		}
 
 		/// <summary>
-		/// Returns a integer (4 bytes) value.
+		/// Reads an integer (4 bytes) from an address.
 		/// </summary>
 		/// <param name="address">Address to read the value from.</param>
-		/// <returns></returns>
 		public int ReadInteger(uint address)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
+			if (address == 0)
+				throw new ArgumentException("address");
 
-			uint bytesRead = 0;
-			byte[] _Value = new byte[sizeof(int)];
-			Win32.ReadProcessMemory(_targetProcessHandle, address, _Value, sizeof(int), ref bytesRead);
-			return BitConverter.ToInt32(_Value, 0);
+			const int size = sizeof(int);
+			var buffer = new byte[size];
+			uint read;
+			Win32.ReadProcessMemory(Handle, address, buffer,
+			                        size, out read);
+			
+			return BitConverter.ToInt32(buffer, 0);
 		}
 
 		/// <summary>
-		/// Returns a long (8 bytes) value.
+		/// Reads an integer (8 bytes) from an address.
 		/// </summary>
 		/// <param name="address">Address to read the value from.</param>
-		/// <returns></returns>
 		public long ReadLong(uint address)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
+			if (address == 0)
+				throw new ArgumentException("address");
 
-			uint bytesRead = 0;
-			byte[] _Value = new byte[sizeof(long)];
-			Win32.ReadProcessMemory(_targetProcessHandle, address, _Value, sizeof(long), ref bytesRead);
-			return BitConverter.ToInt64(_Value, 0);
+			const int size =  sizeof(long);
+			var buffer = new byte[size];
+			uint read;
+			Win32.ReadProcessMemory(Handle, address, buffer,
+			                        size, out read);
+			
+			return BitConverter.ToInt64(buffer, 0);
 		}
 
 		/// <summary>
 		/// Returns a float(single precision floating point) number.
 		/// </summary>
 		/// <param name="address">Address to read the value from.</param>
-		/// <returns></returns>
 		public float ReadFloat(uint address)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
+			if (address == 0)
+				throw new ArgumentException("address");
 
-			uint bytesRead = 0;
-			Byte[] _Value = new byte[sizeof(float)];
-			Win32.ReadProcessMemory(_targetProcessHandle, address, _Value, sizeof(float), ref bytesRead);
-			return BitConverter.ToSingle(_Value, 0);
+			const int size = sizeof(float);
+			var buffer = new byte[size];
+			uint read;
+			Win32.ReadProcessMemory(Handle, address, buffer, size, out read);
+			
+			return BitConverter.ToSingle(buffer, 0);
 		}
 
 		/// <summary>
 		/// Returns a double precision floating point number.
 		/// </summary>
 		/// <param name="address">Address to read the value from.</param>
-		/// <returns></returns>
 		public double ReadDouble(uint address)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
+			if (address == 0)
+				throw new ArgumentException("address");
 
-			uint bytesRead = 0;
-			byte[] _Value = new byte[sizeof(double)];
-			Win32.ReadProcessMemory(_targetProcessHandle, address, _Value, sizeof(double), ref bytesRead);
-			return BitConverter.ToDouble(_Value, 0);
+			const int size = sizeof(double);
+			var buffer = new byte[size];
+			uint read;
+			Win32.ReadProcessMemory(Handle, address, buffer, size, out read);
+			
+			return BitConverter.ToDouble(buffer, 0);
 		}
 
-		public int Readlvl1Pointer(uint address)
+		private uint ReadPointer(uint address)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
+			const int size = sizeof(int);
+			var buffer = new byte[size];
+			uint read;
 
-			if (address == 0) throw new ArgumentNullException("address");
-			uint bytesRead = 0;
-			byte[] _Value = new byte[4];
+			Win32.ReadProcessMemory(Handle, address, buffer, size, out read);
 
-			Win32.ReadProcessMemory(_targetProcessHandle, address, _Value, (uint)IntPtr.Size, ref bytesRead);
-			uint ptrVal = BitConverter.ToUInt32(_Value, 0);
-
-			Win32.ReadProcessMemory(_targetProcessHandle, ptrVal, _Value, 4, ref bytesRead);
-
-			return BitConverter.ToInt32(_Value, 0);
+			return BitConverter.ToUInt32(buffer, 0);
 		}
-
-		private uint ReadPointer(uint adress)
-		{
-			uint ptrNext;
-			uint bytesRead = 0;
-			byte[] _Value = new byte[4];
-
-			Win32.ReadProcessMemory(_targetProcessHandle, adress, _Value, (uint)IntPtr.Size, ref bytesRead);
-			ptrNext = BitConverter.ToUInt32(_Value, 0);
-			return ptrNext;
-		}
-
-
 
 		/// <summary>
-		/// Gets the value holder from a base address and an array of offsets. You can then use WriteXXX, to write whatever you want to it.
+		/// Gets the value holder from a base address and an array of offsets.
+		/// You can then use Write/ReadXXX,
+		/// to write/read whatever you want to it.
 		/// </summary>
-		/// <param name="staticAddress">Static address to begin the read at.</param>
+		/// <param name="staticAddress">Static address to begin counting.
+		/// </param>
 		/// <param name="Offsets">Array of offset to follow/</param>
-		/// <returns></returns>
-		public uint GetFinalAddress(uint staticAddress, uint[] Offsets)
+		public uint GetFinalAddress(uint staticAddress, uint[] offsets)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (staticAddress == 0) throw new ArgumentNullException("address");
-			else if (Offsets == null) throw new ArgumentNullException("The offsets are not valid.");
+			if (staticAddress == 0)
+				throw new ArgumentException("address");
+			else if (offsets == null)
+				throw new ArgumentNullException("The offsets are not valid.");
 
 			uint ptr = ReadPointer(staticAddress);
-			for (int i = 0; i < Offsets.Length - 1; i++)
-			{
-				ptr = ReadPointer(ptr + Offsets[i]);
-			}
-			ptr = ptr + Offsets[Offsets.Length - 1];
+			for (int i = 0; i < offsets.Length - 1; i++)
+				ptr = ReadPointer(ptr + offsets[i]);
+			
+			ptr = ptr + offsets[offsets.Length - 1];
+			
 			return ptr;
 		}
+		#endregion
 
+		#region Write
 		/// <summary>
 		/// Writes an Array of Bytes to an adress.
 		/// </summary>
 		/// <param name="address">Address to write the AOB at.</param>
 		/// <param name="newValue">AOB to write to the adress.</param>
-		public void WriteAOB(uint address, byte[] newValue)
+		public bool WriteAOB(uint address, byte[] newValue)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
-			else if (newValue == null) throw new ArgumentNullException("newValue");
+			if (address == 0)
+				throw new ArgumentException("address");
+			else if (newValue == null)
+				throw new ArgumentNullException("newValue");
 
-			uint bytesWritten = 0;
-			Win32.WriteProcessMemory(_targetProcessHandle, address, newValue, (uint)newValue.Length, ref bytesWritten);
-
+			uint written;
+			return Win32.WriteProcessMemory(Handle, address, newValue,
+			                                (uint)newValue.Length, out written);
 		}
+		
 		/// <summary>
 		/// Writes a byte number to an adress.
 		/// </summary>
-		/// <param name="adress">Address to write the number to.</param>
+		/// <param name="adress">Address to write the value to.</param>
 		/// <param name="newValue">Value to write at the adress.</param>
-		public void WriteByte(uint address, byte newValue)
+		public bool WriteByte(uint address, byte newValue)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
-			else if (newValue == 0) throw new ArgumentNullException("newValue");
+			if (address == 0)
+				throw new ArgumentException("address");
 
-			uint bytesWritten = 0;
-			Byte[] Buffer = BitConverter.GetBytes(newValue);
-			Win32.WriteProcessMemory(_targetProcessHandle, address, Buffer, 1, ref bytesWritten);
+			const int size = sizeof(byte);
+			var buffer = BitConverter.GetBytes(newValue);
+			uint written;
+			
+			return Win32.WriteProcessMemory(Handle, address, buffer,
+			                                size, out written);
 		}
 
 		/// <summary>
 		/// Writes a short (2 bytes) number to an address.
 		/// </summary>
-		/// <param name="adress">Address to write the number to.</param>
+		/// <param name="adress">Address to write the value to.</param>
 		/// <param name="newValue">Value to write at the adress.</param>
-		public void WriteShort(uint address, short newValue)
+		public bool WriteShort(uint address, short newValue)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
-			else if (newValue == 0) throw new ArgumentNullException("newValue");
+			if (address == 0)
+				throw new ArgumentException("address");
 
-			uint bytesWritten = 0;
-			Byte[] Buffer = BitConverter.GetBytes(newValue);
-			Win32.WriteProcessMemory(_targetProcessHandle, address, Buffer, sizeof(short), ref bytesWritten);
-
+			const int size = sizeof(short);
+			var buffer = BitConverter.GetBytes(newValue);
+			uint read;
+			
+			return Win32.WriteProcessMemory(Handle, address, buffer,
+			                                size, out read);
 		}
 
 		/// <summary>
 		/// Writes a integer (4 bytes) number to an adress.
 		/// </summary>
-		/// <param name="adress">Address to write the number to.</param>
+		/// <param name="adress">Address to write the value to.</param>
 		/// <param name="newValue">Value to write at the adress.</param>
-		public void WriteInteger(uint address, int newValue)
+		public bool WriteInteger(uint address, int newValue)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
-
-			else if (newValue == 0) throw new ArgumentNullException("newValue");
-			uint bytesWritten = 0;
-			byte[] Buffer = BitConverter.GetBytes(newValue);
-			Win32.WriteProcessMemory(_targetProcessHandle, address, Buffer, sizeof(int), ref bytesWritten);
-
+			if (address == 0)
+				throw new ArgumentException("address");
+			
+			const int size = sizeof(int);
+			byte[] buffer = BitConverter.GetBytes(newValue);
+			uint read;
+			
+			return Win32.WriteProcessMemory(Handle, address, buffer,
+			                                size, out read);
 		}
 
 		/// <summary>
 		/// Writes a long (8 bytes) number to an address.
 		/// </summary>
-		/// <param name="adress">Address to write the number to.</param>
+		/// <param name="adress">Address to write the value to.</param>
 		/// <param name="newValue">Value to write at the adress.</param>
-		public void WriteLong(uint address, long newValue)
+		public bool WriteLong(uint address, long newValue)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
-			if (address == 0) throw new ArgumentNullException("address");
-			else if (newValue == 0) throw new ArgumentNullException("newValue");
+			if (address == 0)
+				throw new ArgumentException("address");
 
-			uint bytesWritten = 0;
-			byte[] Buffer = BitConverter.GetBytes(newValue);
-			Win32.WriteProcessMemory(_targetProcessHandle, address, Buffer, sizeof(long), ref bytesWritten);
-
-
+			const int size = sizeof(long);
+			byte[] buffer = BitConverter.GetBytes(newValue);
+			uint read;
+			
+			return Win32.WriteProcessMemory(Handle, address, buffer,
+			                                size, out read);
 		}
 
 		/// <summary>
 		/// Writes a single precising floating point number to an address.
 		/// </summary>
-		/// <param name="adress">Address to write the number to.</param>
+		/// <param name="adress">Address to write the value to.</param>
 		/// <param name="newValue">Value to write at the adress.</param>
-		public void WriteFloat(uint address, float newValue)
+		public bool WriteFloat(uint address, float newValue)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
 			if (address == 0)
-				throw new ArgumentNullException("address");
-			else if (newValue == 0)
-				throw new ArgumentNullException("newValue");
+				throw new ArgumentException("address");
 
-			uint bytesWritten = 0;
-			byte[] Buffer = BitConverter.GetBytes(newValue);
-			Win32.WriteProcessMemory(_targetProcessHandle, address, Buffer, sizeof(float), ref bytesWritten);
+			const int size = sizeof(float);
+			var buffer = BitConverter.GetBytes(newValue);
+			uint read;
+			
+			return Win32.WriteProcessMemory(Handle, address, buffer,
+			                                size, out read);
 		}
 
 		/// <summary>
 		/// Writes a double precision floating point number to an adress.
 		/// </summary>
-		/// <param name="adress">Address to write the number to.</param>
+		/// <param name="adress">Address to write the value to.</param>
 		/// <param name="newValue">Value to write at the adress.</param>
-		public void WriteDouble(uint address, double newValue)
+		public bool WriteDouble(uint address, double newValue)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
 			if (address == 0)
-				throw new ArgumentNullException("address");
-			else if (newValue == 0)
-				throw new ArgumentNullException("newValue");
+				throw new ArgumentException("address");
 
-			uint bytesWritten = 0;
-			byte[] Buffer = BitConverter.GetBytes(newValue);
-			Win32.WriteProcessMemory(_targetProcessHandle, address, Buffer, sizeof(double), ref bytesWritten);
-
+			const int size = sizeof(double);
+			var buffer = BitConverter.GetBytes(newValue);
+			uint read;
+			
+			return	Win32.WriteProcessMemory(Handle, address, buffer,
+			                                size, out read);
 		}
+		
+		#endregion
 
-		public uint Protect(uint address, uint size,
+		#region Protection
+		public PageRights Protect(uint address, uint length,
 		                    PageRights pr = PageRights.ExecuteReadWrite)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
 			if (address == 0)
-				throw new ArgumentNullException("address");
-			if (size == 0)
+				throw new ArgumentException("address");
+			if (length == 0)
 				throw new ArgumentNullException("size");
 
-			uint old = 0x0;
-			Win32.VirtualProtectEx(_targetProcessHandle, address, size, (uint)pr, ref old);
-			return old;
+			uint old;
+			Win32.VirtualProtectEx(Handle, address, length, (uint)pr, out old);
+			
+			return (PageRights)old;
 		}
 
-		public void RemoveProtect(uint address, uint size, uint oldProtection)
+		public void RemoveProtect(uint address, uint length, 
+		                          PageRights oldProtection)
 		{
-			if (_targetProcessHandle == IntPtr.Zero)
-			{
-				throw new InvalidOperationException(invalidHandle);
-			}
 			if (address == 0)
-				throw new ArgumentNullException("address");
-			if (size == 0)
+				throw new ArgumentException("address");
+			if (length == 0)
 				throw new ArgumentNullException("size");
 
-			uint old = 0x0;
-			Win32.VirtualProtectEx(_targetProcessHandle, address, size, oldProtection, ref old);
+			uint old;
+			Win32.VirtualProtectEx(Handle, address, length, (uint)oldProtection,
+			                       out old);
 		}
 		#endregion
-	}
-
-
-
-	public static class Extensions
-	{
-		/// <summary>
-		/// Returns a formatted string of the hex number (ex: 0x1337)
-		/// </summary>
-		/// <param name="hexNumber"></param>
-		/// <returns></returns>
-		public static string ToHexString(this int hexNumber)
-		{
-			return string.Format("0x{0}", hexNumber.ToString("X"));
-		}
-
-		public static string ToHexString(this long hexNumber)
-		{
-			return string.Format("0x{0}", hexNumber.ToString("X"));
-		}
-
-		public static string ToHexString(this short hexNumber)
-		{
-			return string.Format("0x{0}", hexNumber.ToString("X"));
-		}
-
-		public static string ToHexString(this byte hexNumber)
-		{
-			return string.Format("0x{0}", hexNumber.ToString("X"));
-		}
-
-
+		
+		#endregion
 	}
 }

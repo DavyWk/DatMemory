@@ -15,16 +15,16 @@ namespace Memory
 		[DllImport("kernel32.dll", SetLastError = true)]
 		public static extern bool ReadProcessMemory
 			(IntPtr process, uint baseAddress, byte[] buffer, uint size,
-			 ref uint numberOfBytesRead);
+			 out uint numberOfBytesRead);
 		
 		[DllImport("kernel32.dll", SetLastError = true)]
 		public static extern bool WriteProcessMemory
 			(IntPtr process, uint baseAddress, byte[] buffer, uint size,
-			 ref uint numberOfBytesWritten);
+			 out uint numberOfBytesWritten);
 
 		[DllImport("kernel32.dll", SetLastError = true)]
 		public static extern bool VirtualProtectEx
 			(IntPtr proces, uint address, uint size, uint newProtect,
-			 ref uint oldProtect);
+			 out uint oldProtect);
 	}
 }
