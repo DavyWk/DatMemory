@@ -11,7 +11,7 @@ namespace Memory
 		
 		#region Setup and miscellaneous
 		
-		private string invalidHandle = "The process handle is invalid.";
+		private const string invalidHandle = "The process handle is invalid.";
 		
 		public bool Attached
 		{
@@ -51,7 +51,8 @@ namespace Memory
 			this.FindProcess(processName);
 		}
 		
-
+		
+		#region Implementing IDisposable
 		~DatMemory()
 		{
 			Dispose(false);
@@ -71,40 +72,9 @@ namespace Memory
 			Dispose(true);
 			GC.SuppressFinalize(this);
 		}
+		#endregion
 		
-		/// <summary>
-		/// Gets all the modules loaded in the process.
-		/// </summary>
-		/// <returns>A Dictionary where
-		/// the key is the address of the module
-		/// and the value is its name.</returns>
-		public SortedDictionary<int, string> GetModuleList()
-		{
-			var dic = new SortedDictionary<int, string>();
-			
-			if(!Attached)
-				return dic;
-			ProcessModuleCollection pmc = targetProcess.Modules;
-
-			foreach (ProcessModule pm in pmc)
-				dic.Add((int)pm.BaseAddress, pm.ModuleName);
-			
-			return dic;
-		}
-
-		/// <summary>
-		/// Gets the base adress of the main module.
-		/// </summary>
-		public int GetBaseAdress()
-		{
-			if (Handle == IntPtr.Zero)
-				throw new InvalidOperationException(invalidHandle);
-
-			var module = targetProcess.MainModule;
-
-			return (int)module.BaseAddress;
-		}
-
+		
 		/// <summary>
 		/// Opens a process
 		/// with rights to manipulate its virtual memory.
@@ -149,13 +119,51 @@ namespace Memory
 			_handle = IntPtr.Zero;
 			Attached = false;
 		}
-		
 
+		#endregion
+		
+		#region Utils
+		
+		/// <summary>
+		/// Gets all the modules loaded in the process.
+		/// </summary>
+		/// <returns>A Dictionary where
+		/// the key is the address of the module
+		/// and the value is its name.</returns>
+		public SortedDictionary<int, string> GetModuleList()
+		{
+			var dic = new SortedDictionary<int, string>();
+			
+			if(!Attached)
+				return dic;
+			ProcessModuleCollection pmc = targetProcess.Modules;
+
+			foreach (ProcessModule pm in pmc)
+				dic.Add((int)pm.BaseAddress, pm.ModuleName);
+			
+			return dic;
+		}
+
+		/// <summary>
+		/// Gets the base adress of the main module.
+		/// </summary>
+		public uint GetBaseAdress()
+		{
+			if (Handle == IntPtr.Zero)
+				throw new InvalidOperationException(invalidHandle);
+
+			var module = targetProcess.MainModule;
+
+			return (uint)module.BaseAddress;
+		}
+
+		
 		#endregion
 
 		#region Functions
 
 		#region Read
+		
 		/// <summary>
 		/// Read a byte (8 bits) from an address.
 		/// </summary>
@@ -298,6 +306,7 @@ namespace Memory
 		#endregion
 
 		#region Write
+		
 		/// <summary>
 		/// Writes an Array of Bytes to an adress.
 		/// </summary>
@@ -426,6 +435,7 @@ namespace Memory
 		#endregion
 
 		#region Protection
+		
 		public PageRights Protect(uint address, uint length,
 		                    PageRights pr = PageRights.ExecuteReadWrite)
 		{
