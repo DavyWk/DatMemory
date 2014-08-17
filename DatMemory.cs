@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Text;
-using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace Memory
 {
@@ -95,7 +95,7 @@ namespace Memory
 		{
 			// If already attached.
 			if(_handle != IntPtr.Zero)
-				return true;
+				Detach();
 			
 			targetProcess = proc;
 			_handle = Win32.OpenProcess(
@@ -170,14 +170,13 @@ namespace Memory
 		/// <param name="address">Address to read the value from.</param>
 		public byte ReadByte(uint address)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(byte);
 			var buffer = new byte[size];
 			uint read;
-			Win32.ReadProcessMemory(Handle, address, buffer,
-			                        size, out read);
+			Win32.ReadProcessMemory(Handle, address, buffer, size, out read);
 			return buffer[0];
 		}
 
@@ -187,14 +186,13 @@ namespace Memory
 		/// <param name="address">Address to read the value from.</param>
 		public short ReadShort(uint address)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(short);
 			var buffer = new byte[size];
 			uint read;
-			Win32.ReadProcessMemory(Handle, address, buffer,
-			                        size, out read);
+			Win32.ReadProcessMemory(Handle, address, buffer, size, out read);
 			
 			return BitConverter.ToInt16(buffer, 0);
 		}
@@ -205,14 +203,13 @@ namespace Memory
 		/// <param name="address">Address to read the value from.</param>
 		public int ReadInteger(uint address)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(int);
 			var buffer = new byte[size];
 			uint read;
-			Win32.ReadProcessMemory(Handle, address, buffer,
-			                        size, out read);
+			Win32.ReadProcessMemory(Handle, address, buffer, size, out read);
 			
 			return BitConverter.ToInt32(buffer, 0);
 		}
@@ -223,14 +220,13 @@ namespace Memory
 		/// <param name="address">Address to read the value from.</param>
 		public long ReadLong(uint address)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size =  sizeof(long);
 			var buffer = new byte[size];
 			uint read;
-			Win32.ReadProcessMemory(Handle, address, buffer,
-			                        size, out read);
+			Win32.ReadProcessMemory(Handle, address, buffer, size, out read);
 			
 			return BitConverter.ToInt64(buffer, 0);
 		}
@@ -241,7 +237,7 @@ namespace Memory
 		/// <param name="address">Address to read the value from.</param>
 		public float ReadFloat(uint address)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(float);
@@ -258,7 +254,7 @@ namespace Memory
 		/// <param name="address">Address to read the value from.</param>
 		public double ReadDouble(uint address)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(double);
@@ -290,9 +286,9 @@ namespace Memory
 		/// <param name="Offsets">Array of offset to follow/</param>
 		public uint GetFinalAddress(uint staticAddress, uint[] offsets)
 		{
-			if (staticAddress == 0)
+			if(staticAddress == 0)
 				throw new ArgumentException("address");
-			else if (offsets == null)
+			else if(offsets == null)
 				throw new ArgumentNullException("The offsets are not valid.");
 
 			uint ptr = ReadPointer(staticAddress);
@@ -314,7 +310,7 @@ namespace Memory
 		/// <param name="newValue">AOB to write to the adress.</param>
 		public bool WriteAOB(uint address, byte[] newValue)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 			else if (newValue == null)
 				throw new ArgumentNullException("newValue");
@@ -331,7 +327,7 @@ namespace Memory
 		/// <param name="newValue">Value to write at the adress.</param>
 		public bool WriteByte(uint address, byte newValue)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(byte);
@@ -349,7 +345,7 @@ namespace Memory
 		/// <param name="newValue">Value to write at the adress.</param>
 		public bool WriteShort(uint address, short newValue)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(short);
@@ -367,11 +363,11 @@ namespace Memory
 		/// <param name="newValue">Value to write at the adress.</param>
 		public bool WriteInteger(uint address, int newValue)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 			
 			const int size = sizeof(int);
-			byte[] buffer = BitConverter.GetBytes(newValue);
+			var buffer = BitConverter.GetBytes(newValue);
 			uint read;
 			
 			return Win32.WriteProcessMemory(Handle, address, buffer,
@@ -385,11 +381,11 @@ namespace Memory
 		/// <param name="newValue">Value to write at the adress.</param>
 		public bool WriteLong(uint address, long newValue)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(long);
-			byte[] buffer = BitConverter.GetBytes(newValue);
+			var buffer = BitConverter.GetBytes(newValue);
 			uint read;
 			
 			return Win32.WriteProcessMemory(Handle, address, buffer,
@@ -403,7 +399,7 @@ namespace Memory
 		/// <param name="newValue">Value to write at the adress.</param>
 		public bool WriteFloat(uint address, float newValue)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(float);
@@ -421,7 +417,7 @@ namespace Memory
 		/// <param name="newValue">Value to write at the adress.</param>
 		public bool WriteDouble(uint address, double newValue)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 
 			const int size = sizeof(double);
@@ -433,13 +429,65 @@ namespace Memory
 		}
 		
 		#endregion
+		
+		public T Read<T>(uint address) where T : struct
+		{
+			if(address == 0)
+				throw new ArgumentException("address");
+			
+			T ret;
+			Type type = typeof(T);
+			int size = Marshal.SizeOf(type);
+			var buffer = new byte[size];
+			uint read;
+			IntPtr ptr = IntPtr.Zero;
+			
+			Win32.ReadProcessMemory(Handle, address, buffer,
+			                        (uint)size, out read);
+			
+			if(read != size)
+			{
+				return new T();
+			}
+			
+			ptr = Marshal.AllocHGlobal(size);
+			Marshal.Copy(buffer, 0, ptr, size);
+			
+			ret = (T)Marshal.PtrToStructure(ptr, type);
+			Marshal.FreeHGlobal(ptr);
+			
+			return ret;
+		}
+		
+		public bool Write<T>(uint address, T newValue) where T : struct
+		{
+			if(address == 0)
+				throw new ArgumentException("address");
+			
+			Type type = typeof(T);
+			int size = Marshal.SizeOf(type);
+			uint written;
+			var buffer = new byte[size];
+			IntPtr ptr = IntPtr.Zero;
+			
+			ptr = Marshal.AllocHGlobal(size);
+			Marshal.StructureToPtr(newValue, ptr, true);
+			Marshal.Copy(ptr, buffer, 0, size);
+			
+			Win32.WriteProcessMemory(Handle, address, buffer,
+			                         (uint)size , out written);
+			
+			Marshal.FreeHGlobal(ptr);
+			
+			return written == size;
+		}
 
 		#region Protection
 		
 		public PageRights Protect(uint address, uint length,
-		                    PageRights pr = PageRights.ExecuteReadWrite)
+		                          PageRights pr = PageRights.ExecuteReadWrite)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 			if (length == 0)
 				throw new ArgumentNullException("size");
@@ -450,10 +498,10 @@ namespace Memory
 			return (PageRights)old;
 		}
 
-		public void RemoveProtect(uint address, uint length, 
+		public void RemoveProtect(uint address, uint length,
 		                          PageRights oldProtection)
 		{
-			if (address == 0)
+			if(address == 0)
 				throw new ArgumentException("address");
 			if (length == 0)
 				throw new ArgumentNullException("size");
