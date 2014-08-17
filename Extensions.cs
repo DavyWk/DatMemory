@@ -7,7 +7,7 @@
 		/// </summary>
 		public static string ToHexString(this int hexNumber)
 		{
-			return string.Format("0x{0}", hexNumber.ToString("X"));
+			return string.Format("0x{0:X}", hexNumber);
 		}
 		
 		/// <summary>
@@ -15,7 +15,7 @@
 		/// </summary>
 		public static string ToHexString(this long hexNumber)
 		{
-			return string.Format("0x{0}", hexNumber.ToString("X"));
+			return string.Format("0x{0:X}", hexNumber);
 		}
 		
 		/// <summary>
@@ -23,7 +23,7 @@
 		/// </summary>
 		public static string ToHexString(this short hexNumber)
 		{
-			return string.Format("0x{0}", hexNumber.ToString("X"));
+			return string.Format("0x{0:X}", hexNumber);
 		}
 		
 		/// <summary>
@@ -31,7 +31,7 @@
 		/// </summary>
 		public static string ToHexString(this byte hexNumber)
 		{
-			return string.Format("0x{0}", hexNumber.ToString("X"));
+			return string.Format("0x{0:X}", hexNumber);
 		}
 
 
